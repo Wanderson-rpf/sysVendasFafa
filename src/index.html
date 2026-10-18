@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>Loja da Fafá</title>
+    <!--
+      Sem <base href> de propósito: no Electron a página vem de file://.../index.html e, com base "./",
+      o roteador reescreveria a URL para ".../browser/#/rota" (sem o index.html), quebrando o F5.
+      Com HashLocationStrategy os caminhos relativos resolvem a partir do próprio index.html.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ws://localhost:*"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="icone.svg" />
+    <script>
+      // Aplica o tema salvo antes do Angular subir, evitando "piscar" claro → escuro.
+      try {
+        var t = localStorage.getItem('tema');
+        if (t === 'claro') document.documentElement.dataset.theme = 'light';
+        if (t === 'escuro') document.documentElement.dataset.theme = 'dark';
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <app-root></app-root>
+  </body>
+</html>
