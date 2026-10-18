@@ -1,0 +1,297 @@
+<div class="page-header">
+  <div>
+    <h1>Vendas e recebimentos</h1>
+    <p>Registre vendas, receba pagamentos (inteiro, parcial, misto ou em permuta) e acompanhe quem está devendo.</p>
+  </div>
+  <div class="toolbar">
+    @if (aba() !== 'inadimplentes') {
+      <label class="field"><span>Cliente</span>
+        <input [ngModel]="busca()" (ngModelChange)="busca.set($event)" placeholder="Buscar por nome" />
+      </label>
+    }
+    @if (aba() === 'quitada' || aba() === 'todas') {
+      <label class="field"><span>De</span><input type="date" [(ngModel)]="de" (change)="carregar()" /></label>
+      <label class="field"><span>Até</span><input type="date" [(ngModel)]="ate" (change)="carregar()" /></label>
+    }
+    <button class="btn btn-primary" (click)="nova()" [disabled]="!api.disponivel">+ Nova venda</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <button [class.ativo]="aba() === 'pendentes'" (click)="trocarAba('pendentes')">A receber</button>
+  <button [class.ativo]="aba() === 'atrasada'" (click)="trocarAba('atrasada')">Atrasadas</button>
+  <button [class.ativo]="aba() === 'inadimplentes'" (click)="trocarAba('inadimplentes')">Inadimplentes por cliente</button>
+  <button [class.ativo]="aba() === 'quitada'" (click)="trocarAba('quitada')">Quitadas</button>
+  <button [class.ativo]="aba() === 'todas'" (click)="trocarAba('todas')">Todas</button>
+</div>
+
+@if (aba() === 'inadimplentes') {
+  <div class="card" style="padding: 0">
+    <table>
+      <thead>
+        <tr><th>Cliente</th><th>Telefone</th><th class="num">Vendas em atraso</th><th class="num">Maior atraso</th><th class="num">Saldo devedor</th><th></th></tr>
+      </thead>
+      <tbody>
+        @for (i of inadimplentes(); track i.cliente_id) {
+          <tr>
+            <td><strong>{{ i.cliente }}</strong></td>
+            <td>{{ i.telefone | telefone }}</td>
+            <td class="num">{{ i.vendas }}</td>
+            <td class="num">{{ i.maior_atraso }} dias</td>
+            <td class="num neg"><strong>{{ i.saldo | brl }}</strong></td>
+            <td class="acoes"><button class="btn btn-sm" (click)="verDoCliente(i)">Ver vendas</button></td>
+          </tr>
+        } @empty {
+          <tr><td colspan="6" class="vazio">Nenhum cliente com pagamento atrasado.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+} @else {
+  <div class="card" style="padding: 0">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th><th>Data</th><th>Cliente</th><th>Vencimento</th><th>Situação</th>
+            <th class="num">Total</th><th class="num">Recebido</th><th class="num">Saldo</th><th></th>
+          </tr>
+        </thead>
+        <tbody>
+          @for (v of filtrada(); track v.id) {
+            <tr class="linha-clicavel" (click)="abrir(v.id)">
+              <td class="muted">{{ v.id }}</td>
+              <td>{{ v.data | dataBr }}</td>
+              <td>{{ v.cliente }} <span class="muted">· {{ v.qtd_pecas }} peça(s)</span></td>
+              <td>
+                {{ v.vencimento | dataBr }}
+                @if (v.dias_atraso) { <div class="neg" style="font-size: 12px">{{ v.dias_atraso }} dias de atraso</div> }
+              </td>
+              <td><span class="badge badge-{{ v.situacao }}">{{ rotuloSituacao[v.situacao] }}</span></td>
+              <td class="num">{{ v.total | brl }}</td>
+              <td class="num">{{ v.recebido | brl }}</td>
+              <td class="num"><strong>{{ v.saldo | brl }}</strong></td>
+              <td class="acoes">
+                @if (v.saldo > 0 && v.situacao !== 'cancelada') {
+                  <button class="btn btn-sm btn-primary" (click)="$event.stopPropagation(); receber(v)">Receber</button>
+                }
+              </td>
+            </tr>
+          } @empty {
+            <tr><td colspan="9" class="vazio">Nenhuma venda encontrada.</td></tr>
+          }
+        </tbody>
+        @if (filtrada().length) {
+          <tfoot>
+            <tr>
+              <td colspan="5">{{ filtrada().length }} venda(s)</td>
+              <td class="num">{{ totais().total | brl }}</td>
+              <td class="num">{{ totais().recebido | brl }}</td>
+              <td class="num">{{ totais().saldo | brl }}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        }
+      </table>
+    </div>
+  </div>
+}
+
+<!-- ===================================================== Detalhe da venda -->
+@if (detalhe(); as d) {
+  <app-modal [titulo]="'Venda #' + d.id + ' — ' + d.cliente" [largo]="true" (fechar)="detalhe.set(null)">
+    <div class="grid grid-stats">
+      <div class="stat"><div class="rotulo">Situação</div><div class="valor"><span class="badge badge-{{ d.situacao }}">{{ rotuloSituacao[d.situacao] }}</span></div></div>
+      <div class="stat"><div class="rotulo">Total</div><div class="valor">{{ d.total | brl }}</div><div class="sub">Lucro {{ d.lucro | brl }}</div></div>
+      <div class="stat"><div class="rotulo">Recebido</div><div class="valor">{{ d.recebido | brl }}</div></div>
+      <div class="stat"><div class="rotulo">Saldo</div><div class="valor" [class.neg]="d.saldo > 0">{{ d.saldo | brl }}</div><div class="sub">Vence {{ d.vencimento | dataBr }}</div></div>
+    </div>
+
+    <div class="grid grid-2">
+      <div>
+        <h3 style="margin-bottom: 8px">Peças</h3>
+        <table>
+          <thead><tr><th>Descrição</th><th class="num">Qtd</th><th class="num">Preço</th><th class="num">Subtotal</th></tr></thead>
+          <tbody>
+            @for (i of d.itens; track i.id) {
+              <tr>
+                <td>{{ i.descricao }}</td>
+                <td class="num">{{ i.quantidade }}</td>
+                <td class="num">{{ i.preco_unitario | brl }}</td>
+                <td class="num">{{ i.quantidade * i.preco_unitario | brl }}</td>
+              </tr>
+            }
+          </tbody>
+          @if (d.desconto) {
+            <tfoot><tr><td colspan="3">Desconto</td><td class="num">−{{ d.desconto | brl }}</td></tr></tfoot>
+          }
+        </table>
+        @if (d.observacao) { <p class="muted">{{ d.observacao }}</p> }
+      </div>
+      <div>
+        <h3 style="margin-bottom: 8px">Recebimentos</h3>
+        <table>
+          <thead><tr><th>Data</th><th>Forma</th><th class="num">Valor</th><th></th></tr></thead>
+          <tbody>
+            @for (r of d.recebimentos; track r.id) {
+              <tr>
+                <td>{{ r.data | dataBr }}</td>
+                <td>{{ rotuloForma[r.forma] }} @if (r.descricao) { <div class="muted">{{ r.descricao }}</div> }</td>
+                <td class="num">{{ r.valor | brl }}</td>
+                <td class="acoes"><button class="btn-icon" title="Estornar" (click)="excluirRecebimento(r.id)">↺</button></td>
+              </tr>
+            } @empty {
+              <tr><td colspan="4" class="vazio">Nada recebido ainda.</td></tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <ng-container rodape>
+      <button class="btn btn-danger" (click)="excluir(d)">Excluir</button>
+      <button class="btn" style="margin-right: auto" (click)="cancelar(d)">
+        {{ d.situacao === 'cancelada' ? 'Reativar venda' : 'Cancelar venda' }}
+      </button>
+      <button class="btn" (click)="editar(d)" [disabled]="d.situacao === 'cancelada'">Editar</button>
+      @if (d.saldo > 0 && d.situacao !== 'cancelada') {
+        <button class="btn btn-primary" (click)="receber(d)">Receber</button>
+      }
+    </ng-container>
+  </app-modal>
+}
+
+<!-- ===================================================== Nova / editar venda -->
+@if (editando(); as v) {
+  <app-modal [titulo]="v.id ? 'Editar venda #' + v.id : 'Nova venda'" [largo]="true" (fechar)="editando.set(null)">
+    <div class="form-grid">
+      <div class="field span-2">
+        <span>Cliente</span>
+        @if (novoCliente === null) {
+          <div style="display: flex; gap: 6px">
+            <select [(ngModel)]="v.cliente_id" style="flex: 1">
+              <option [ngValue]="null">Sem cliente</option>
+              @for (c of clientes(); track c.id) { <option [ngValue]="c.id">{{ c.nome }}</option> }
+            </select>
+            <button type="button" class="btn" (click)="novoCliente = ''">+ Novo</button>
+          </div>
+        } @else {
+          <div style="display: flex; gap: 6px">
+            <input [(ngModel)]="novoCliente" placeholder="Nome do cliente" style="flex: 1" (keydown.enter)="cadastrarCliente(v)" />
+            <button type="button" class="btn btn-primary" (click)="cadastrarCliente(v)">Cadastrar</button>
+            <button type="button" class="btn" (click)="novoCliente = null">✕</button>
+          </div>
+        }
+      </div>
+      <label class="field"><span>Data da venda</span><input type="date" [(ngModel)]="v.data" /></label>
+      <label class="field"><span>Vencimento</span><input type="date" [(ngModel)]="v.vencimento" /></label>
+    </div>
+
+    <div>
+      <div class="card-header" style="margin-bottom: 8px">
+        <h3>Peças</h3>
+        <div class="toolbar">
+          <select [(ngModel)]="escolhaEstoque" (ngModelChange)="adicionarDoEstoque(v)" style="min-width: 320px">
+            <option [ngValue]="null">Adicionar do estoque…</option>
+            @for (e of estoque(); track e.id) {
+              <option [ngValue]="e.id">
+                {{ e.descricao }}{{ e.tamanho ? ' (' + e.tamanho + ')' : '' }} — {{ e.preco_venda | brl }} — {{ e.disponivel }} disp.
+              </option>
+            }
+          </select>
+          <button type="button" class="btn btn-sm" (click)="adicionarAvulso(v)" title="Peça que não foi lançada nas entradas">+ Item avulso</button>
+        </div>
+      </div>
+      <table class="table-edit">
+        <thead>
+          <tr><th>Descrição</th><th style="width: 80px" class="num">Qtd</th><th style="width: 130px" class="num">Preço un.</th><th style="width: 120px" class="num">Subtotal</th><th style="width: 36px"></th></tr>
+        </thead>
+        <tbody>
+          @for (i of v.itens; track $index; let idx = $index) {
+            <tr>
+              <td>
+                <input [(ngModel)]="i.descricao" [readonly]="!!i.compra_item_id" />
+              </td>
+              <td><input type="number" min="1" step="1" [(ngModel)]="i.quantidade" /></td>
+              <td><input moeda [(ngModel)]="i.preco_unitario" /></td>
+              <td class="num">{{ i.quantidade * i.preco_unitario | brl }}</td>
+              <td><button type="button" class="btn-icon" (click)="v.itens.splice(idx, 1)" aria-label="Remover">✕</button></td>
+            </tr>
+          } @empty {
+            <tr><td colspan="5" class="vazio">Escolha peças do estoque ou adicione um item avulso.</td></tr>
+          }
+        </tbody>
+      </table>
+    </div>
+
+    <div class="grid grid-2">
+      <label class="field"><span>Observações</span><textarea rows="4" [(ngModel)]="v.observacao"></textarea></label>
+      @let t = totalVenda(v);
+      <div class="card" style="box-shadow: none">
+        <div class="resumo-linhas">
+          <span>Subtotal</span><span class="num">{{ t.bruto | brl }}</span>
+          <span>Desconto</span>
+          <input moeda [(ngModel)]="v.desconto" style="width: 120px" />
+          <span class="total">Total</span><span class="num total">{{ t.total | brl }}</span>
+        </div>
+        @if (!v.id) {
+          <label style="display: block; margin-top: 12px">
+            <input type="checkbox" [(ngModel)]="receberAoSalvar" /> Registrar pagamento logo após salvar
+          </label>
+        }
+      </div>
+    </div>
+
+    <ng-container rodape>
+      <button class="btn" (click)="editando.set(null)">Cancelar</button>
+      <button class="btn btn-primary" (click)="salvarVenda(v)" [disabled]="ocupado()">Salvar venda</button>
+    </ng-container>
+  </app-modal>
+}
+
+<!-- ===================================================== Receber -->
+@if (recebendo(); as r) {
+  <app-modal [titulo]="'Receber — venda #' + r.venda.id + ' (' + r.venda.cliente + ')'" (fechar)="recebendo.set(null)">
+    <div class="resumo-linhas">
+      <span>Total da venda</span><span class="num">{{ r.venda.total | brl }}</span>
+      <span>Já recebido</span><span class="num">{{ r.venda.recebido | brl }}</span>
+      <span class="total">Saldo devedor</span><span class="num total">{{ r.venda.saldo | brl }}</span>
+    </div>
+
+    <label class="field"><span>Data do recebimento</span><input type="date" [(ngModel)]="r.data" /></label>
+
+    <div style="display: flex; flex-direction: column; gap: 10px">
+      @for (p of r.partes; track $index; let i = $index) {
+        <div class="parte">
+          <select [(ngModel)]="p.forma">
+            @for (f of formas; track f.valor) { <option [ngValue]="f.valor">{{ f.rotulo }}</option> }
+          </select>
+          <input moeda [(ngModel)]="p.valor" />
+          <button type="button" class="btn btn-sm" (click)="completar(r, i)" title="Preencher com o que falta">Resto</button>
+          <button type="button" class="btn-icon" (click)="removerParte(r, i)" [disabled]="r.partes.length === 1" aria-label="Remover">✕</button>
+          @if (exigeDescricao(p.forma)) {
+            <input class="span-all" [(ngModel)]="p.descricao"
+                   [placeholder]="p.forma === 'servico' ? 'Qual serviço? Ex.: 2 sessões de manicure' : 'O que foi recebido? Ex.: 1 bolsa de couro'" />
+          }
+        </div>
+      }
+      <button type="button" class="btn btn-sm" style="align-self: start" (click)="adicionarParte(r)">+ Outra forma de pagamento</button>
+    </div>
+
+    <div class="resumo-linhas">
+      <span>Recebendo agora</span><span class="num">{{ somaPartes(r) | brl }}</span>
+      <span class="total">Ficará devendo</span>
+      <span class="num total" [class.neg]="restante(r) < 0">{{ restante(r) | brl }}</span>
+    </div>
+    @if (restante(r) < 0) {
+      <div class="alerta alerta-erro" style="margin: 0">O valor informado é maior que o saldo devedor.</div>
+    }
+
+    <ng-container rodape>
+      <button class="btn" (click)="recebendo.set(null)">Cancelar</button>
+      <button class="btn btn-primary" (click)="confirmarRecebimento(r)" [disabled]="ocupado() || somaPartes(r) <= 0 || restante(r) < 0">
+        Confirmar recebimento
+      </button>
+    </ng-container>
+  </app-modal>
+}

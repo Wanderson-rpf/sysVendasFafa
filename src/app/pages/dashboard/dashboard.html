@@ -1,0 +1,129 @@
+<div class="page-header">
+  <div>
+    <h1>Olá! Como estão as vendas? 🌸</h1>
+    <p>Resumo de vendas, gastos e lucro no período escolhido.</p>
+  </div>
+</div>
+
+<div class="filtros">
+  <app-filtro-periodo [(de)]="de" [(ate)]="ate" (alterado)="carregar()" />
+</div>
+
+@if (dados(); as d) {
+  <div class="grid grid-stats">
+    <div class="card stat destaque">
+      <div class="rotulo">Vendido</div>
+      <div class="valor">{{ d.vendido | brl }}</div>
+      <div class="sub">
+        {{ d.qtd_vendas }} {{ d.qtd_vendas === 1 ? 'venda' : 'vendas' }} ·
+        {{ d.pecas_vendidas }} {{ d.pecas_vendidas === 1 ? 'peça' : 'peças' }}
+      </div>
+    </div>
+    <div class="card stat destaque">
+      <div class="rotulo">Lucro líquido</div>
+      <div class="valor" [class.neg]="d.lucro_liquido < 0">{{ d.lucro_liquido | brl }}</div>
+      <div class="sub">Margem {{ d.margem | pct }} · bruto {{ d.lucro_bruto | brl }}</div>
+    </div>
+    <div class="card stat">
+      <div class="rotulo">Recebido</div>
+      <div class="valor">{{ d.recebido | brl }}</div>
+      <div class="sub">Entrou no caixa no período</div>
+    </div>
+    <div class="card stat">
+      <div class="rotulo">A receber</div>
+      <div class="valor">{{ d.a_receber | brl }}</div>
+      <div class="sub">
+        @if (d.inadimplente > 0) {
+          <span class="neg">{{ d.inadimplente | brl }} em atraso</span>
+        } @else {
+          Nada em atraso
+        }
+      </div>
+    </div>
+
+    <div class="card stat">
+      <div class="rotulo">Investido em compras</div>
+      <div class="valor">{{ d.investido | brl }}</div>
+      <div class="sub">Com frete, descontos e comissões</div>
+    </div>
+    <div class="card stat">
+      <div class="rotulo">Despesas avulsas</div>
+      <div class="valor">{{ d.despesas | brl }}</div>
+      <div class="sub"><a routerLink="/despesas">Ver despesas</a></div>
+    </div>
+    <div class="card stat">
+      <div class="rotulo">Saldo de caixa</div>
+      <div class="valor" [class.pos]="d.saldo_caixa > 0" [class.neg]="d.saldo_caixa < 0">{{ d.saldo_caixa | brl }}</div>
+      <div class="sub">Recebido − compras − despesas</div>
+    </div>
+    <div class="card stat">
+      <div class="rotulo">Estoque</div>
+      <div class="valor">{{ d.estoque.pecas }} peças</div>
+      <div class="sub">Custo {{ d.estoque.valor_custo | brl }} · venda {{ d.estoque.valor_venda | brl }}</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 16px">
+    <h2>Últimos 12 meses</h2>
+    <app-grafico-mensal [dados]="d.mensal" />
+  </div>
+
+  <div class="grid grid-3" style="margin-top: 16px">
+    <div class="card">
+      <h2>Recebido por forma de pagamento</h2>
+      @if (d.formas.length) {
+        <div class="barras">
+          @for (f of d.formas; track f.forma) {
+            <div class="barra-linha">
+              <span>{{ rotuloForma[f.forma] }}</span>
+              <span class="num">{{ f.valor | brl }}</span>
+              <span class="barra"><i [style.width.%]="(f.valor / maiorForma()) * 100"></i></span>
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="vazio">Nenhum recebimento no período.</div>
+      }
+    </div>
+
+    <div class="card">
+      <h2>Despesas por categoria</h2>
+      @if (d.despesas_categoria.length) {
+        <div class="barras">
+          @for (c of d.despesas_categoria; track c.categoria) {
+            <div class="barra-linha">
+              <span>{{ rotuloCategoria[c.categoria] || c.categoria }}</span>
+              <span class="num">{{ c.valor | brl }}</span>
+              <span class="barra"><i [style.width.%]="(c.valor / maiorDespesa()) * 100"></i></span>
+            </div>
+          }
+        </div>
+      } @else {
+        <div class="vazio">Nenhuma despesa no período.</div>
+      }
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2>Quem está devendo</h2>
+        <a routerLink="/vendas" [queryParams]="{ aba: 'inadimplentes' }" class="btn btn-sm">Ver todos</a>
+      </div>
+      @if (d.inadimplentes.length) {
+        <table>
+          <tbody>
+            @for (i of d.inadimplentes; track i.cliente_id) {
+              <tr>
+                <td>{{ i.cliente }}<div class="muted">{{ i.maior_atraso }} dias de atraso</div></td>
+                <td class="num neg">{{ i.saldo | brl }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      } @else {
+        <div class="vazio">Ninguém em atraso. 🎉</div>
+      }
+    </div>
+  </div>
+} @else if (api.disponivel) {
+  <div class="vazio">Carregando…</div>
+}

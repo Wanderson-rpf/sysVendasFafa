@@ -1,0 +1,175 @@
+<div class="page-header">
+  <div>
+    <h1>Entradas de produtos</h1>
+    <p>Compras feitas para revenda: fornecedores, valor investido, frete, descontos e comissões.</p>
+  </div>
+  <button class="btn btn-primary" (click)="nova()" [disabled]="!api.disponivel">+ Nova entrada</button>
+</div>
+
+<div class="filtros">
+  <app-filtro-periodo [(de)]="de" [(ate)]="ate" (alterado)="carregar()" />
+</div>
+
+<div class="grid grid-stats" style="margin-bottom: 16px">
+  <div class="card stat"><div class="rotulo">Total investido</div><div class="valor">{{ totais().investido | brl }}</div></div>
+  <div class="card stat"><div class="rotulo">Peças compradas</div><div class="valor">{{ totais().pecas }}</div></div>
+  <div class="card stat">
+    <div class="rotulo">Economizado</div>
+    <div class="valor" [class.pos]="totais().economia > 0">{{ totais().economia | brl }}</div>
+    <div class="sub">Descontos, cupons e comissões</div>
+  </div>
+  <div class="card stat"><div class="rotulo">Venda prevista</div><div class="valor">{{ totais().previsto | brl }}</div></div>
+  <div class="card stat">
+    <div class="rotulo">Lucro previsto</div>
+    <div class="valor" [class.neg]="totais().lucro < 0">{{ totais().lucro | brl }}</div>
+  </div>
+</div>
+
+<div class="card" style="padding: 0">
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th>
+          <th>Descrição / fornecedores</th>
+          <th class="num">Peças</th>
+          <th class="num">Produtos</th>
+          <th class="num">Frete</th>
+          <th class="num" title="Quanto você economizou com descontos/cupons e ganhou de comissão/cashback">Economia</th>
+          <th class="num">Investido</th>
+          <th class="num">Lucro previsto</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (c of lista(); track c.id) {
+          <tr class="linha-clicavel" (click)="abrir(c.id)">
+            <td>{{ c.data | dataBr }}</td>
+            <td>
+              {{ c.descricao || 'Entrada #' + c.id }}
+              <div class="muted">{{ c.fornecedores.join(', ') || 'Sem fornecedor' }}</div>
+            </td>
+            <td class="num">{{ c.qtd_pecas }}</td>
+            <td class="num">{{ c.valor_produtos | brl }}</td>
+            <td class="num">{{ c.frete | brl }}</td>
+            <td class="num" [class.pos]="c.desconto + c.comissao > 0" [class.muted]="!(c.desconto + c.comissao)">
+              {{ c.desconto + c.comissao | brl }}
+            </td>
+            <td class="num"><strong>{{ c.total_investido | brl }}</strong></td>
+            <td class="num" [class.pos]="c.lucro_previsto > 0" [class.neg]="c.lucro_previsto < 0">{{ c.lucro_previsto | brl }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="8" class="vazio">Nenhuma entrada no período.</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>
+
+@if (editando(); as c) {
+  <app-modal [titulo]="c.id ? 'Entrada #' + c.id : 'Nova entrada'" [largo]="true" (fechar)="editando.set(null)">
+    <div class="form-grid">
+      <label class="field"><span>Data da compra</span><input type="date" [(ngModel)]="c.data" required /></label>
+      <label class="field span-2"><span>Descrição (opcional)</span>
+        <input [(ngModel)]="c.descricao" placeholder="Ex.: Pedido Shopee de outubro" />
+      </label>
+      <label class="field"><span>Frete</span><input moeda [(ngModel)]="c.frete" /></label>
+      <label class="field"><span>Desconto / cupom</span><input moeda [(ngModel)]="c.desconto" /></label>
+      <label class="field" title="Comissão ou cashback que você recebeu por comprar no seu próprio link (ex.: afiliado Shopee)">
+        <span>Comissão / cashback</span><input moeda [(ngModel)]="c.comissao" />
+      </label>
+    </div>
+
+    <div>
+      <div class="card-header" style="margin-bottom: 8px">
+        <h3>Peças</h3>
+        <div class="toolbar">
+          @if (novoFornecedor === null) {
+            <button type="button" class="btn btn-sm" (click)="novoFornecedor = ''">+ Fornecedor</button>
+          } @else {
+            <input [(ngModel)]="novoFornecedor" placeholder="Nome do fornecedor" (keydown.enter)="cadastrarFornecedor(c)" />
+            <button type="button" class="btn btn-sm btn-primary" (click)="cadastrarFornecedor(c)">Cadastrar</button>
+            <button type="button" class="btn btn-sm" (click)="novoFornecedor = null">Cancelar</button>
+          }
+          <span class="muted">|</span>
+          <label class="muted">Margem
+            <input type="number" style="width: 70px" [(ngModel)]="margemPadrao" /> %
+          </label>
+          <button type="button" class="btn btn-sm" (click)="aplicarMargem(c)" title="Preenche o preço de venda de todas as peças">
+            Aplicar margem
+          </button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="table-edit">
+          <thead>
+            <tr>
+              <th style="width: 18%">Fornecedor</th>
+              <th>Descrição</th>
+              <th style="width: 80px">Tam.</th>
+              <th style="width: 70px" class="num">Qtd</th>
+              <th style="width: 110px" class="num">Custo un.</th>
+              <th style="width: 110px" class="num">Venda un.</th>
+              <th style="width: 110px" class="num">Lucro</th>
+              <th style="width: 36px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of c.itens; track $index; let i = $index) {
+              <tr>
+                <td>
+                  <select [(ngModel)]="item.fornecedor_id">
+                    <option [ngValue]="null">—</option>
+                    @for (f of fornecedores(); track f.id) {
+                      <option [ngValue]="f.id">{{ f.nome }}</option>
+                    }
+                  </select>
+                </td>
+                <td><input [(ngModel)]="item.descricao" placeholder="Ex.: Vestido midi floral" /></td>
+                <td><input [(ngModel)]="item.tamanho" placeholder="P/M/G" /></td>
+                <td><input type="number" step="1" [(ngModel)]="item.quantidade" [min]="item.vendidos || 1" /></td>
+                <td><input moeda [(ngModel)]="item.custo_unitario" /></td>
+                <td><input moeda [(ngModel)]="item.preco_venda" /></td>
+                <td class="num" [class.neg]="item.preco_venda < item.custo_unitario">
+                  {{ (item.preco_venda - item.custo_unitario) * item.quantidade | brl }}
+                </td>
+                <td>
+                  @if (item.vendidos) {
+                    <span class="muted" title="Peça com vendas: não pode ser removida">{{ item.vendidos }}✓</span>
+                  } @else {
+                    <button type="button" class="btn-icon" (click)="removerItem(c, i)" [disabled]="c.itens.length === 1" aria-label="Remover peça">✕</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <button type="button" class="btn btn-sm" style="margin-top: 8px" (click)="adicionarItem(c)">+ Adicionar peça</button>
+    </div>
+
+    <div class="grid grid-2">
+      <label class="field"><span>Observações</span><textarea rows="5" [(ngModel)]="c.observacao"></textarea></label>
+      @let r = calculo(c);
+      <div class="card" style="box-shadow: none">
+        <div class="resumo-linhas">
+          <span>Produtos</span><span class="num">{{ r.produtos | brl }}</span>
+          <span>+ Frete</span><span class="num">{{ c.frete || 0 | brl }}</span>
+          <span>Economia com desconto / cupom</span><span class="num" [class.pos]="c.desconto > 0">{{ c.desconto || 0 | brl }}</span>
+          <span>Economia com comissão / cashback</span><span class="num" [class.pos]="c.comissao > 0">{{ c.comissao || 0 | brl }}</span>
+          <span class="total">Total investido</span><span class="num total">{{ r.investido | brl }}</span>
+          <span>Venda prevista</span><span class="num">{{ r.venda | brl }}</span>
+          <span><strong>Lucro previsto</strong>&nbsp;<span class="muted">({{ r.margem | pct }})</span></span>
+          <span class="num" [class.pos]="r.lucro > 0" [class.neg]="r.lucro < 0"><strong>{{ r.lucro | brl }}</strong></span>
+        </div>
+      </div>
+    </div>
+
+    <ng-container rodape>
+      @if (c.id) {
+        <button type="button" class="btn btn-danger" style="margin-right: auto" (click)="excluir(c)">Excluir</button>
+      }
+      <button type="button" class="btn" (click)="editando.set(null)">Cancelar</button>
+      <button type="button" class="btn btn-primary" (click)="salvar(c)" [disabled]="salvando()">Salvar entrada</button>
+    </ng-container>
+  </app-modal>
+}

@@ -1,0 +1,81 @@
+{
+  "name": "sys-vendas-fafa",
+  "productName": "Loja da Fafá",
+  "version": "0.1.0",
+  "description": "Gestão de revenda de roupas: entradas, vendas, recebimentos e lucro.",
+  "author": "Wanderson Ricardo",
+  "main": "dist-electron/main.js",
+  "private": true,
+  "scripts": {
+    "ng": "ng",
+    "start": "tsc -p electron && concurrently -k -n ng,tsc,electron -c blue,yellow,magenta \"ng serve --host 127.0.0.1 --port 4200\" \"npm:dev:tsc\" \"npm:dev:electron\"",
+    "dev:tsc": "tsc -p electron --watch --preserveWatchOutput",
+    "dev:electron": "wait-on tcp:127.0.0.1:4200 && cross-env ELECTRON_DEV_URL=http://127.0.0.1:4200 node scripts/electron.js --watch",
+    "build": "ng build && tsc -p electron",
+    "build:electron": "tsc -p electron",
+    "preview": "npm run build && node scripts/electron.js",
+    "dist": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "dist:todos": "npm run build && electron-builder --linux --win",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test"
+  },
+  "packageManager": "npm@11.6.2",
+  "//": "Tudo em devDependencies de propósito: o Angular já sai empacotado no build e o processo principal não usa pacotes de runtime — assim o instalador fica pequeno.",
+  "dependencies": {},
+  "devDependencies": {
+    "@angular/build": "^21.2.27",
+    "@angular/cli": "^21.2.27",
+    "@angular/common": "^21.2.0",
+    "@angular/compiler": "^21.2.0",
+    "@angular/compiler-cli": "^21.2.0",
+    "@angular/core": "^21.2.0",
+    "@angular/forms": "^21.2.0",
+    "@angular/platform-browser": "^21.2.0",
+    "@angular/router": "^21.2.0",
+    "@types/node": "^24.19.2",
+    "concurrently": "^10.0.6",
+    "cross-env": "^10.1.0",
+    "electron": "^44.9.0",
+    "electron-builder": "^26.15.3",
+    "jsdom": "^28.0.0",
+    "prettier": "^3.8.1",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "typescript": "~5.9.2",
+    "vitest": "^4.0.8",
+    "wait-on": "^9.5.1"
+  },
+  "build": {
+    "appId": "br.com.sysvendas.fafa",
+    "productName": "Loja da Fafá",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/sys-vendas-fafa/browser/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "icon": "build/icon.png",
+    "win": {
+      "target": "nsis",
+      "artifactName": "Loja-da-Fafa-Setup-${version}.${ext}"
+    },
+    "appImage": {
+      "artifactName": "Loja-da-Fafa-${version}.${ext}"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Office",
+      "maintainer": "Wanderson Ricardo",
+      "synopsis": "Gestão de revenda de roupas"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "Loja da Fafá"
+    }
+  }
+}
