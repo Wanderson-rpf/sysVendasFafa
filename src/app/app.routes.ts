@@ -18,6 +18,11 @@ export const routes: Routes = [
     loadComponent: () => import('./pages/vendas/vendas').then((m) => m.VendasPage),
   },
   {
+    path: 'encomendas',
+    title: 'Encomendas · Loja da Fafá',
+    loadComponent: () => import('./pages/encomendas/encomendas').then((m) => m.EncomendasPage),
+  },
+  {
     path: 'despesas',
     title: 'Despesas · Loja da Fafá',
     loadComponent: () => import('./pages/despesas/despesas').then((m) => m.DespesasPage),

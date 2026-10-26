@@ -8,6 +8,7 @@ import { compras } from './repos/compras';
 import { configuracoes } from './repos/configuracoes';
 import { dashboard } from './repos/dashboard';
 import { despesas } from './repos/despesas';
+import { pedidos } from './repos/pedidos';
 import { vendas } from './repos/vendas';
 
 const DEV_URL = process.env['ELECTRON_DEV_URL'];
@@ -57,6 +58,16 @@ const handlers: Record<string, (args: any) => unknown> = {
   'despesas.listar': (filtro) => despesas.listar(filtro),
   'despesas.salvar': (d) => despesas.salvar(d),
   'despesas.excluir': (id) => despesas.excluir(id),
+
+  'pedidos.listar': (filtro) => pedidos.listar(filtro),
+  'pedidos.obter': (id) => pedidos.obter(id),
+  'pedidos.salvar': (p) => pedidos.salvar(p),
+  'pedidos.excluir': (id) => pedidos.excluir(id),
+  'pedidos.alterarStatus': (a) => pedidos.alterarStatus(a),
+  'pedidos.reservarDoEstoque': (a) => pedidos.reservarDoEstoque(a),
+  'pedidos.gerarVenda': (a) => pedidos.gerarVenda(a),
+  'pedidos.listaCompras': () => pedidos.listaCompras(),
+  'pedidos.pendentesParaEntrada': () => pedidos.pendentesParaEntrada(),
 
   'dashboard.resumo': (filtro) => dashboard.resumo(filtro),
 

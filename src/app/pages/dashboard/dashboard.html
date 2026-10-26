@@ -63,6 +63,18 @@
     </div>
   </div>
 
+  @if (d.encomendas.a_comprar + d.encomendas.aguardando + d.encomendas.prontos > 0) {
+    <a class="card faixa-encomendas" routerLink="/encomendas">
+      <strong>✎ Encomendas</strong>
+      <span><b>{{ d.encomendas.a_comprar }}</b> peça(s) a comprar</span>
+      <span><b>{{ d.encomendas.aguardando }}</b> aguardando chegar</span>
+      <span [class.pos]="d.encomendas.prontos > 0"><b>{{ d.encomendas.prontos }}</b> pronta(s) para entregar</span>
+      @if (d.encomendas.atrasados > 0) { <span class="neg"><b>{{ d.encomendas.atrasados }}</b> com prazo vencido</span> }
+      @if (d.encomendas.sinal_em_aberto > 0) { <span class="muted">sinais recebidos: {{ d.encomendas.sinal_em_aberto | brl }}</span> }
+      <span class="ir">Ver →</span>
+    </a>
+  }
+
   <div class="card" style="margin-top: 16px">
     <h2>Últimos 12 meses</h2>
     <app-grafico-mensal [dados]="d.mensal" />

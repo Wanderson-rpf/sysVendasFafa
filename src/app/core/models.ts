@@ -36,6 +36,74 @@ export interface Despesa {
   observacao?: string | null;
 }
 
+// ------------------------------------------------------------------ Encomendas
+
+export type StatusEncomenda = 'anotado' | 'comprado' | 'chegou' | 'entregue' | 'cancelado';
+export type AbaEncomendas = 'a_comprar' | 'aguardando' | 'prontos' | 'finalizados' | 'todos';
+
+export interface PedidoItem {
+  id?: number;
+  descricao: string;
+  tamanho?: string | null;
+  cor?: string | null;
+  referencia?: string | null;
+  quantidade: number;
+  preco: number;
+  fornecedor_id?: number | null;
+  // somente leitura
+  fornecedor?: string | null;
+  status?: StatusEncomenda;
+  compra_item_id?: number | null;
+  venda_id?: number | null;
+  cliente?: string;
+  pedido_id?: number;
+}
+
+export interface Pedido {
+  id?: number;
+  cliente_id: number | null;
+  data: string;
+  prazo?: string | null;
+  sinal: number;
+  sinal_forma?: string | null;
+  observacao?: string | null;
+  itens: PedidoItem[];
+}
+
+export interface PedidoResumo extends Pedido {
+  id: number;
+  cliente: string;
+  telefone: string | null;
+  sinal_restante: number;
+  total: number;
+  contagem: Record<StatusEncomenda, number>;
+  situacao: 'aberto' | 'entregue' | 'cancelado';
+  atrasado: boolean;
+}
+
+export interface GrupoListaCompras {
+  fornecedor_id: number | null;
+  fornecedor: string;
+  pecas: number;
+  itens: (PedidoItem & { cliente: string; prazo: string | null })[];
+}
+
+export interface ResumoEncomendas {
+  a_comprar: number;
+  aguardando: number;
+  prontos: number;
+  atrasados: number;
+  sinal_em_aberto: number;
+}
+
+export const ROTULO_STATUS_ENCOMENDA: Record<StatusEncomenda, string> = {
+  anotado: 'A comprar',
+  comprado: 'Comprado',
+  chegou: 'Chegou',
+  entregue: 'Entregue',
+  cancelado: 'Cancelado',
+};
+
 export const CATEGORIAS_DESPESA: { valor: string; rotulo: string }[] = [
   { valor: 'embalagem', rotulo: 'Embalagem' },
   { valor: 'entrega', rotulo: 'Entrega / transporte' },
@@ -79,6 +147,10 @@ export interface CompraItem {
   preco_venda: number;
   custo_efetivo?: number;
   vendidos?: number;
+  /** item de encomenda atendido por esta peça */
+  pedido_item_id?: number | null;
+  /** somente leitura: nome(s) da(s) cliente(s) da encomenda */
+  encomenda_de?: string | null;
 }
 
 export interface Compra {
@@ -210,6 +282,7 @@ export interface Dashboard {
   formas: { forma: FormaPagamento; valor: number; qtd: number }[];
   inadimplentes: Inadimplente[];
   mensal: ResumoMensal[];
+  encomendas: ResumoEncomendas;
 }
 
 export interface BackupInfo {

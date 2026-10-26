@@ -4,8 +4,14 @@ import {
   Cliente,
   Compra,
   CompraResumo,
+  AbaEncomendas,
   Dashboard,
   Despesa,
+  GrupoListaCompras,
+  Pedido,
+  PedidoItem,
+  PedidoResumo,
+  StatusEncomenda,
   Fornecedor,
   Inadimplente,
   ItemEstoque,
@@ -70,6 +76,21 @@ export class ApiService {
     listar: (f: Periodo & { categoria?: string } = {}) => this.call<Despesa[]>('despesas.listar', f),
     salvar: (d: Despesa) => this.call<number>('despesas.salvar', d),
     excluir: (id: number) => this.call<void>('despesas.excluir', id),
+  };
+
+  pedidos = {
+    listar: (aba: AbaEncomendas) => this.call<PedidoResumo[]>('pedidos.listar', { aba }),
+    obter: (id: number) => this.call<PedidoResumo>('pedidos.obter', id),
+    salvar: (p: Pedido) => this.call<number>('pedidos.salvar', p),
+    excluir: (id: number) => this.call<void>('pedidos.excluir', id),
+    alterarStatus: (item_id: number, status: StatusEncomenda) =>
+      this.call<void>('pedidos.alterarStatus', { item_id, status }),
+    reservarDoEstoque: (item_id: number, compra_item_id: number) =>
+      this.call<void>('pedidos.reservarDoEstoque', { item_id, compra_item_id }),
+    gerarVenda: (pedido_id: number, data: string, vencimento: string | null) =>
+      this.call<number>('pedidos.gerarVenda', { pedido_id, data, vencimento }),
+    listaCompras: () => this.call<GrupoListaCompras[]>('pedidos.listaCompras'),
+    pendentesParaEntrada: () => this.call<PedidoItem[]>('pedidos.pendentesParaEntrada'),
   };
 
   dashboard = {

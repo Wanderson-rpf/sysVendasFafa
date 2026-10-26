@@ -2,7 +2,7 @@ import { Component, computed, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ApiService } from '../../core/api.service';
 import { arred, BrlPipe, DataBrPipe, fimDoMes, hoje, inicioDoMes, PctPipe } from '../../core/format';
-import { Compra, CompraItem, CompraResumo, Fornecedor } from '../../core/models';
+import { Compra, CompraItem, CompraResumo, Fornecedor, PedidoItem } from '../../core/models';
 import { ConfirmService } from '../../core/confirm.service';
 import { ToastService } from '../../core/toast.service';
 import { FiltroPeriodo } from '../../shared/filtro-periodo';
@@ -36,6 +36,7 @@ export class ComprasPage implements OnInit {
   protected readonly salvando = signal(false);
   protected novoFornecedor: string | null = null;
   protected margemPadrao = 100;
+  protected readonly incluindo = signal<{ item: PedidoItem; marcado: boolean }[] | null>(null);
 
   protected readonly totais = computed(() => {
     const l = this.lista();
@@ -90,7 +91,45 @@ export class ComprasPage implements OnInit {
   }
 
   aplicarMargem(c: Compra) {
-    for (const item of c.itens) item.preco_venda = arred(item.custo_unitario * (1 + this.margemPadrao / 100));
+    // Peças de encomenda já têm preço combinado com a cliente: não sobrescreve.
+    for (const item of c.itens) {
+      if (item.pedido_item_id) continue;
+      item.preco_venda = arred(item.custo_unitario * (1 + this.margemPadrao / 100));
+    }
+  }
+
+  // ------------------------------------------------------------ encomendas
+  async abrirEncomendas(c: Compra) {
+    try {
+      const jaNaEntrada = new Set(c.itens.map((i) => i.pedido_item_id).filter(Boolean));
+      const pendentes = (await this.api.pedidos.pendentesParaEntrada()).filter((p) => !jaNaEntrada.has(p.id));
+      if (!pendentes.length) return this.toast.info('Nenhuma encomenda pendente para incluir.');
+      // Pré-marca as do mesmo fornecedor da entrada (se já houver um escolhido).
+      const fornecedor = c.itens.find((i) => i.fornecedor_id)?.fornecedor_id;
+      this.incluindo.set(pendentes.map((item) => ({ item, marcado: !fornecedor || item.fornecedor_id === fornecedor })));
+    } catch (e) {
+      this.toast.erro(e);
+    }
+  }
+
+  incluirEncomendas(c: Compra) {
+    const escolhidas = (this.incluindo() ?? []).filter((x) => x.marcado).map((x) => x.item);
+    // Se o formulário só tem a linha vazia inicial, substitui ela.
+    if (c.itens.length === 1 && !c.itens[0].descricao.trim()) c.itens.splice(0, 1);
+    for (const p of escolhidas) {
+      c.itens.push({
+        fornecedor_id: p.fornecedor_id ?? null,
+        descricao: [p.descricao, p.cor].filter(Boolean).join(' '),
+        tamanho: p.tamanho ?? '',
+        quantidade: p.quantidade,
+        custo_unitario: 0,
+        preco_venda: p.preco,
+        pedido_item_id: p.id!,
+        encomenda_de: p.cliente,
+      });
+    }
+    this.incluindo.set(null);
+    if (escolhidas.length) this.toast.info(`${escolhidas.length} peça(s) de encomenda incluída(s). Preencha o custo de cada uma.`);
   }
 
   async cadastrarFornecedor(c: Compra) {

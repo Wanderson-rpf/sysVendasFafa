@@ -72,6 +72,7 @@ export class App {
       titulo: 'Movimento',
       itens: [
         { rota: '/vendas', rotulo: 'Vendas e recebimentos', icone: '♡' },
+        { rota: '/encomendas', rotulo: 'Encomendas', icone: '✎' },
         { rota: '/compras', rotulo: 'Entradas de produtos', icone: '⇣' },
         { rota: '/despesas', rotulo: 'Despesas', icone: '⊖' },
       ],

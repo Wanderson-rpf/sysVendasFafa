@@ -1,4 +1,4 @@
-import { Component, HostListener, inject, input, output } from '@angular/core';
+import { Component, HostListener, inject, input, OnDestroy, output } from '@angular/core';
 import { ConfirmService } from '../core/confirm.service';
 
 @Component({
@@ -16,11 +16,22 @@ import { ConfirmService } from '../core/confirm.service';
     </div>
   `,
 })
-export class Modal {
+export class Modal implements OnDestroy {
+  /** Modais abertos, do mais antigo ao do topo: com um modal sobre outro, o Esc fecha só o de cima. */
+  private static pilha: Modal[] = [];
+
   readonly titulo = input.required<string>();
   readonly largo = input(false);
   readonly fechar = output<void>();
   private readonly confirmacao = inject(ConfirmService);
+
+  constructor() {
+    Modal.pilha.push(this);
+  }
+
+  ngOnDestroy(): void {
+    Modal.pilha = Modal.pilha.filter((m) => m !== this);
+  }
 
   /**
    * Fecha só quando o clique é no fundo escuro. Precisa ser um método sem retorno: se a expressão do
@@ -32,7 +43,8 @@ export class Modal {
 
   @HostListener('document:keydown.escape')
   esc() {
-    // Com uma confirmação aberta por cima, o Esc pertence a ela.
-    if (!this.confirmacao.atual()) this.fechar.emit();
+    // Com uma confirmação ou outro modal aberto por cima, o Esc pertence a eles.
+    if (this.confirmacao.atual() || Modal.pilha.at(-1) !== this) return;
+    this.fechar.emit();
   }
 }

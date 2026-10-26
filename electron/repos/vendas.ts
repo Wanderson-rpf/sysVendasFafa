@@ -1,4 +1,5 @@
 import { fromCents, getDb, toCents, transaction } from '../database';
+import { RESERVADOS_SQL, VENDIDOS_SQL } from './compras';
 
 export type FormaPagamento =
   | 'dinheiro'
@@ -41,6 +42,12 @@ export interface FiltroVendas {
   ate?: string;
   situacao?: Situacao | 'pendentes' | '';
   cliente_id?: number | null;
+}
+
+/** Recebimentos que vieram do sinal de uma encomenda: ao serem desfeitos, o valor volta a ser sinal disponível. */
+function devolverSinal(recs: { pedido_id: number; valor: number }[]): void {
+  const stmt = getDb().prepare('UPDATE pedidos SET sinal_usado = MAX(0, sinal_usado - ?) WHERE id = ?');
+  for (const r of recs) stmt.run(r.valor, r.pedido_id);
 }
 
 export function hoje(): string {
@@ -156,11 +163,11 @@ export const vendas = {
         );
       }
 
+      // Peças reservadas para encomendas não podem ser vendidas para outra pessoa.
       const estoqueStmt = db.prepare(
         `SELECT ci.descricao, ci.custo_efetivo,
-                ci.quantidade - (SELECT COALESCE(SUM(vi.quantidade),0) FROM venda_itens vi
-                                   JOIN vendas v ON v.id = vi.venda_id AND v.cancelada = 0
-                                  WHERE vi.compra_item_id = ci.id) AS disponivel
+                ${RESERVADOS_SQL} AS reservados,
+                ci.quantidade - ${VENDIDOS_SQL} - ${RESERVADOS_SQL} AS disponivel
            FROM compra_itens ci WHERE ci.id = ?`,
       );
       const insert = db.prepare(
@@ -175,7 +182,11 @@ export const vendas = {
           const est = estoqueStmt.get(item.compra_item_id) as any;
           if (!est) throw new Error('Peça de estoque não encontrada.');
           if (est.disponivel < qtd)
-            throw new Error(`Estoque insuficiente para "${est.descricao}" (disponível: ${est.disponivel}).`);
+            throw new Error(
+              `Estoque insuficiente para "${est.descricao}" (disponível: ${Math.max(0, est.disponivel)}` +
+                (est.reservados ? `, ${est.reservados} reservada(s) para encomenda` : '') +
+                ').',
+            );
           custo = est.custo_efetivo;
         }
         insert.run({
@@ -192,11 +203,23 @@ export const vendas = {
   },
 
   cancelar(id: number, cancelada = true): void {
-    getDb().prepare('UPDATE vendas SET cancelada = ? WHERE id = ?').run(cancelada ? 1 : 0, id);
+    transaction(() => {
+      getDb().prepare('UPDATE vendas SET cancelada = ? WHERE id = ?').run(cancelada ? 1 : 0, id);
+      // Itens de encomenda dessa venda: cancelada → voltam a "chegou" (peça reservada de novo para a cliente).
+      getDb()
+        .prepare('UPDATE pedido_itens SET status = ? WHERE venda_id = ?')
+        .run(cancelada ? 'chegou' : 'entregue', id);
+    });
   },
 
   excluir(id: number): void {
-    getDb().prepare('DELETE FROM vendas WHERE id = ?').run(id);
+    transaction(() => {
+      const db = getDb();
+      // O sinal que tinha virado recebimento nesta venda volta a ficar disponível na encomenda.
+      devolverSinal(db.prepare('SELECT pedido_id, valor FROM recebimentos WHERE venda_id = ? AND pedido_id IS NOT NULL').all(id) as any[]);
+      db.prepare("UPDATE pedido_itens SET status = 'chegou', venda_id = NULL WHERE venda_id = ?").run(id);
+      db.prepare('DELETE FROM vendas WHERE id = ?').run(id);
+    });
   },
 
   receber(input: RecebimentoInput): void {
@@ -232,7 +255,10 @@ export const vendas = {
   },
 
   excluirRecebimento(id: number): void {
-    getDb().prepare('DELETE FROM recebimentos WHERE id = ?').run(id);
+    transaction(() => {
+      devolverSinal(getDb().prepare('SELECT pedido_id, valor FROM recebimentos WHERE id = ? AND pedido_id IS NOT NULL').all(id) as any[]);
+      getDb().prepare('DELETE FROM recebimentos WHERE id = ?').run(id);
+    });
   },
 
   /** Saldo devedor em atraso agrupado por cliente. */

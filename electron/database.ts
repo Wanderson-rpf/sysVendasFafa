@@ -116,6 +116,45 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX ix_despesas_data ON despesas(data);
   `,
+  // v3 — encomendas: peças que as clientes pedem, do "anotado" até virar venda
+  `
+  CREATE TABLE pedidos (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    cliente_id   INTEGER NOT NULL REFERENCES clientes(id),
+    data         TEXT NOT NULL,
+    prazo        TEXT,
+    sinal        INTEGER NOT NULL DEFAULT 0,  -- adiantamento pago pela cliente
+    sinal_forma  TEXT,
+    sinal_usado  INTEGER NOT NULL DEFAULT 0,  -- quanto do sinal já virou recebimento em vendas
+    observacao   TEXT,
+    criado_em    TEXT NOT NULL DEFAULT (datetime('now','localtime'))
+  );
+
+  -- status: anotado → comprado → chegou → entregue (ou cancelado).
+  -- Com status comprado/chegou e compra_item_id preenchido, a peça fica RESERVADA para a cliente.
+  CREATE TABLE pedido_itens (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    pedido_id       INTEGER NOT NULL REFERENCES pedidos(id) ON DELETE CASCADE,
+    descricao       TEXT NOT NULL,
+    tamanho         TEXT,
+    cor             TEXT,
+    referencia      TEXT,                     -- link do anúncio ou código, para achar a peça de novo
+    quantidade      INTEGER NOT NULL DEFAULT 1,
+    preco           INTEGER NOT NULL DEFAULT 0, -- preço combinado com a cliente (por unidade)
+    fornecedor_id   INTEGER REFERENCES fornecedores(id),
+    status          TEXT NOT NULL DEFAULT 'anotado',
+    compra_item_id  INTEGER REFERENCES compra_itens(id) ON DELETE SET NULL,
+    venda_id        INTEGER REFERENCES vendas(id) ON DELETE SET NULL
+  );
+
+  -- Recebimento que veio do sinal de uma encomenda (para devolver o sinal se a venda for excluída).
+  ALTER TABLE recebimentos ADD COLUMN pedido_id INTEGER REFERENCES pedidos(id) ON DELETE SET NULL;
+
+  CREATE INDEX ix_pedido_itens_pedido ON pedido_itens(pedido_id);
+  CREATE INDEX ix_pedido_itens_status ON pedido_itens(status);
+  CREATE INDEX ix_pedido_itens_compra ON pedido_itens(compra_item_id);
+  CREATE INDEX ix_pedido_itens_venda  ON pedido_itens(venda_id);
+  `,
 ];
 
 export function openDatabase(file: string): DatabaseSync {
@@ -151,14 +190,24 @@ function migrate(conn: DatabaseSync): void {
   }
 }
 
+/**
+ * Executa fn numa transação. Pode ser aninhada (ex.: gerar venda a partir de uma encomenda chama
+ * vendas.salvar dentro da própria transação): as internas viram SAVEPOINTs, e um erro em qualquer
+ * nível desfaz só aquele nível — quem chamou decide se propaga.
+ */
+let profundidade = 0;
 export function transaction<T>(fn: () => T, conn: DatabaseSync = getDb()): T {
-  conn.exec('BEGIN');
+  const nome = `sp${profundidade}`;
+  conn.exec(profundidade === 0 ? 'BEGIN' : `SAVEPOINT ${nome}`);
+  profundidade++;
   try {
     const result = fn();
-    conn.exec('COMMIT');
+    profundidade--;
+    conn.exec(profundidade === 0 ? 'COMMIT' : `RELEASE ${nome}`);
     return result;
   } catch (err) {
-    conn.exec('ROLLBACK');
+    profundidade--;
+    conn.exec(profundidade === 0 ? 'ROLLBACK' : `ROLLBACK TO ${nome}; RELEASE ${nome}`);
     throw err;
   }
 }
