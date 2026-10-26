@@ -1,0 +1,160 @@
+.encomendas {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.encomenda {
+  padding: 0;
+  overflow: hidden;
+
+  &.atrasada {
+    border-left: 4px solid var(--bad);
+  }
+
+  > header,
+  > footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+  }
+  > header {
+    border-bottom: 1px solid var(--border);
+  }
+  > footer {
+    border-top: 1px solid var(--border);
+    background: var(--surface-2);
+  }
+  .cliente {
+    font-size: 15px;
+  }
+}
+
+.etiquetas {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.badge-sinal {
+  background: var(--good-soft);
+  color: var(--good);
+}
+
+.pecas {
+  list-style: none;
+  margin: 0;
+  padding: 4px 0;
+
+  li {
+    display: grid;
+    grid-template-columns: 96px 1fr auto auto;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 16px;
+  }
+  li + li {
+    border-top: 1px dashed var(--border);
+  }
+  li.apagada .peca {
+    opacity: 0.55;
+  }
+  .detalhe {
+    font-size: 12px;
+    margin-top: 2px;
+  }
+  .aviso {
+    color: var(--warn);
+  }
+  a {
+    color: var(--primary);
+  }
+}
+
+.acoes-peca {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  justify-content: flex-end;
+  min-width: 150px;
+}
+
+/* Etapas da peça: cada uma com cor própria + texto (nunca só a cor) */
+.status {
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: center;
+  border-radius: 999px;
+  padding: 3px 8px;
+  white-space: nowrap;
+}
+.status-anotado {
+  background: var(--warn-soft);
+  color: var(--warn);
+}
+.status-comprado {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+.status-chegou {
+  background: var(--good-soft);
+  color: var(--good);
+}
+.status-entregue,
+.status-cancelado {
+  background: var(--surface-2);
+  color: var(--text-3);
+}
+.status-cancelado {
+  text-decoration: line-through;
+}
+
+.obs {
+  margin: 0;
+  padding: 0 16px 12px;
+  color: var(--text-2);
+}
+
+.btn-whats {
+  text-decoration: none;
+  color: #128c4b;
+  border-color: #9fdcb8;
+}
+
+tr.apagada td {
+  opacity: 0.55;
+}
+
+.lista-estoque {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 340px;
+  overflow: auto;
+}
+.opcao-estoque {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+.opcao-estoque:hover {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}
+
+.grupo-compra h3 {
+  margin-bottom: 6px;
+}
+.grupo-compra a {
+  color: var(--primary);
+}

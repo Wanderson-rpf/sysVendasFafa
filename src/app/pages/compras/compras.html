@@ -83,6 +83,9 @@
       <div class="card-header" style="margin-bottom: 8px">
         <h3>Peças</h3>
         <div class="toolbar">
+          <button type="button" class="btn btn-sm" (click)="abrirEncomendas(c)" title="Traz as peças que clientes encomendaram e ainda não foram lançadas">
+            ✎ Incluir encomendas
+          </button>
           @if (novoFornecedor === null) {
             <button type="button" class="btn btn-sm" (click)="novoFornecedor = ''">+ Fornecedor</button>
           } @else {
@@ -124,7 +127,12 @@
                     }
                   </select>
                 </td>
-                <td><input [(ngModel)]="item.descricao" placeholder="Ex.: Vestido midi floral" /></td>
+                <td>
+                  <input [(ngModel)]="item.descricao" placeholder="Ex.: Vestido midi floral" />
+                  @if (item.encomenda_de) {
+                    <div class="tag-encomenda" title="Peça reservada para esta cliente">✎ encomenda de {{ item.encomenda_de }}</div>
+                  }
+                </td>
                 <td><input [(ngModel)]="item.tamanho" placeholder="P/M/G" /></td>
                 <td><input type="number" step="1" [(ngModel)]="item.quantidade" [min]="item.vendidos || 1" /></td>
                 <td><input moeda [(ngModel)]="item.custo_unitario" /></td>
@@ -172,4 +180,31 @@
       <button type="button" class="btn btn-primary" (click)="salvar(c)" [disabled]="salvando()">Salvar entrada</button>
     </ng-container>
   </app-modal>
+}
+
+<!-- ===================================================== Incluir encomendas -->
+@if (incluindo(); as lista) {
+  @if (editando(); as c) {
+    <app-modal titulo="Incluir peças de encomendas" (fechar)="incluindo.set(null)">
+      <p class="muted" style="margin: 0">
+        Marque as peças desta compra. Elas entram na entrada já com o preço combinado e ficam reservadas para a cliente.
+      </p>
+      <div class="lista-incluir">
+        @for (x of lista; track x.item.id) {
+          <label class="opcao-incluir" [class.marcada]="x.marcado">
+            <input type="checkbox" [(ngModel)]="x.marcado" />
+            <span>
+              {{ x.item.quantidade > 1 ? x.item.quantidade + 'x ' : '' }}<strong>{{ x.item.descricao }}</strong>
+              @if (x.item.tamanho) { · {{ x.item.tamanho }} } @if (x.item.cor) { · {{ x.item.cor }} }
+              <div class="muted">p/ {{ x.item.cliente }} · {{ x.item.fornecedor || 'sem fornecedor' }} · combinado {{ x.item.preco | brl }}</div>
+            </span>
+          </label>
+        }
+      </div>
+      <ng-container rodape>
+        <button type="button" class="btn" (click)="incluindo.set(null)">Cancelar</button>
+        <button type="button" class="btn btn-primary" (click)="incluirEncomendas(c)">Incluir marcadas</button>
+      </ng-container>
+    </app-modal>
+  }
 }

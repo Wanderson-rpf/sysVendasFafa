@@ -1,6 +1,7 @@
 import { fromCents, getDb } from '../database';
 import { compras, FiltroPeriodo } from './compras';
 import { despesas } from './despesas';
+import { pedidos } from './pedidos';
 import { vendas } from './vendas';
 
 const soma = (xs: number[]) => Math.round(xs.reduce((s, x) => s + x, 0) * 100) / 100;
@@ -53,6 +54,7 @@ export const dashboard = {
       },
       formas: formas.map((f) => ({ forma: f.forma, valor: fromCents(f.valor), qtd: f.qtd })),
       inadimplentes: vendas.inadimplentes().slice(0, 5),
+      encomendas: pedidos.resumo(),
       mensal: dashboard.mensal(),
     };
   },

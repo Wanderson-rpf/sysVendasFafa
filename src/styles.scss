@@ -639,3 +639,30 @@ tfoot td {
 .toast-info {
   border-left-color: var(--primary);
 }
+
+/* Peça de encomenda dentro do formulário de entrada */
+.tag-encomenda {
+  font-size: 11.5px;
+  color: var(--accent);
+  margin: 2px 0 0 4px;
+}
+.lista-incluir {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 360px;
+  overflow: auto;
+}
+.opcao-incluir {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 9px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.opcao-incluir.marcada {
+  border-color: var(--primary);
+  background: var(--primary-soft);
+}

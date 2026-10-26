@@ -1,0 +1,306 @@
+<div class="page-header">
+  <div>
+    <h1>Encomendas</h1>
+    <p>Peças que as clientes pediram: do "anotei" até a entrega.</p>
+  </div>
+  <div class="toolbar">
+    <button class="btn" (click)="abrirListaCompras()" [disabled]="!api.disponivel">🛍 Lista de compras</button>
+    <button class="btn btn-primary" (click)="nova()" [disabled]="!api.disponivel">+ Nova encomenda</button>
+  </div>
+</div>
+
+<div class="tabs">
+  @for (a of abas; track a.valor) {
+    <button [class.ativo]="aba() === a.valor" (click)="aba.set(a.valor)" [title]="a.dica">
+      {{ a.rotulo }}<span class="contagem">{{ contagem()[a.valor] }}</span>
+    </button>
+  }
+</div>
+
+<div class="filtros">
+  <input [ngModel]="busca()" (ngModelChange)="busca.set($event)" placeholder="Buscar por cliente ou peça…" style="width: 300px" />
+</div>
+
+<div class="encomendas">
+  @for (p of visiveis(); track p.id) {
+    <article class="card encomenda" [class.atrasada]="p.atrasado">
+      <header>
+        <div>
+          <strong class="cliente">{{ p.cliente }}</strong>
+          <span class="muted"> · #{{ p.id }} · anotada em {{ p.data | dataBr }}</span>
+          @if (p.telefone) { <span class="muted"> · {{ p.telefone | telefone }}</span> }
+        </div>
+        <div class="etiquetas">
+          @if (p.prazo && p.situacao === 'aberto') {
+            <span class="badge" [class.badge-atrasada]="p.atrasado" [class.badge-aberta]="!p.atrasado">
+              {{ p.atrasado ? 'Prazo vencido' : 'Prazo' }} {{ p.prazo | dataBr }}
+            </span>
+          }
+          @if (p.sinal > 0) {
+            <span class="badge badge-sinal" [title]="'Sinal pago em ' + rotuloForma[p.sinal_forma || 'pix']">
+              Sinal {{ p.sinal | brl }}@if (p.sinal_restante < p.sinal) { · usado }
+            </span>
+          }
+          @if (p.situacao !== 'aberto') {
+            <span class="badge" [class.badge-quitada]="p.situacao === 'entregue'" [class.badge-cancelada]="p.situacao === 'cancelado'">
+              {{ p.situacao === 'entregue' ? 'Entregue' : 'Cancelada' }}
+            </span>
+          }
+        </div>
+      </header>
+
+      <ul class="pecas">
+        @for (i of p.itens; track i.id) {
+          <li [class.apagada]="i.status === 'cancelado' || i.status === 'entregue'">
+            <span class="status status-{{ i.status }}">{{ rotuloStatus[i.status!] }}</span>
+            <div class="peca">
+              <div>
+                {{ i.quantidade > 1 ? i.quantidade + 'x ' : '' }}<strong>{{ i.descricao }}</strong>
+                @if (i.tamanho) { <span class="muted"> · {{ i.tamanho }}</span> }
+                @if (i.cor) { <span class="muted"> · {{ i.cor }}</span> }
+              </div>
+              <div class="muted detalhe">
+                {{ i.fornecedor || 'sem fornecedor' }}
+                @if (i.referencia) {
+                  ·
+                  @if (ehLink(i.referencia)) { <a [href]="i.referencia" target="_blank">ver anúncio ↗</a> }
+                  @else { ref. {{ i.referencia }} }
+                }
+                @if (i.compra_item_id && (i.status === 'comprado' || i.status === 'chegou')) { · <span title="Peça lançada nas entradas e reservada para esta cliente">🔒 reservada</span> }
+                @if (i.status === 'chegou' && !i.compra_item_id) { · <span class="aviso" title="Sem entrada vinculada: o custo não entra no lucro da venda">sem custo lançado</span> }
+              </div>
+            </div>
+            <span class="num">{{ i.quantidade * i.preco | brl }}</span>
+            <div class="acoes-peca">
+              @switch (i.status) {
+                @case ('anotado') {
+                  <button class="btn btn-sm" (click)="status(i, 'comprado')" title="Já comprei, estou esperando chegar">Comprei</button>
+                  <button class="btn btn-sm" (click)="status(i, 'chegou')">Chegou</button>
+                  <button class="btn btn-sm" (click)="abrirReserva(i)" title="Atender com uma peça que já está no estoque">Do estoque</button>
+                }
+                @case ('comprado') {
+                  <button class="btn btn-sm" (click)="status(i, 'chegou')">Chegou</button>
+                  <button class="btn-icon" (click)="status(i, 'anotado')" title="Voltar para 'a comprar'">↺</button>
+                }
+                @case ('chegou') {
+                  <button class="btn-icon" (click)="status(i, 'anotado')" title="Voltar para 'a comprar' (libera a reserva)">↺</button>
+                }
+                @case ('cancelado') {
+                  <button class="btn btn-sm" (click)="status(i, 'anotado')">Reabrir</button>
+                }
+              }
+              @if (i.status === 'anotado' || i.status === 'comprado' || i.status === 'chegou') {
+                <button class="btn-icon" (click)="status(i, 'cancelado')" title="Cancelar esta peça">✕</button>
+              }
+            </div>
+          </li>
+        }
+      </ul>
+
+      @if (p.observacao) { <p class="obs">📝 {{ p.observacao }}</p> }
+
+      <footer>
+        <span class="muted">Total {{ p.total | brl }}@if (p.sinal_restante > 0) { · sinal a abater {{ p.sinal_restante | brl }} }</span>
+        <div class="toolbar">
+          <button class="btn btn-sm" (click)="editar(p)">Editar</button>
+          @if (p.contagem.chegou > 0) {
+            @if (linkWhatsApp(p); as wa) {
+              <a class="btn btn-sm btn-whats" [href]="wa" target="_blank" title="Abre o WhatsApp com a mensagem pronta">Avisar no WhatsApp</a>
+            }
+            <button class="btn btn-sm btn-primary" (click)="abrirGerarVenda(p)">Gerar venda ({{ p.contagem.chegou }})</button>
+          }
+        </div>
+      </footer>
+    </article>
+  } @empty {
+    <div class="card vazio">
+      @if (todos().length) { Nenhuma encomenda nesta aba. } @else { Nenhuma encomenda ainda. Clique em <strong>+ Nova encomenda</strong> para anotar o primeiro pedido. }
+    </div>
+  }
+</div>
+
+<!-- ===================================================== Nova / editar -->
+@if (editando(); as p) {
+  <app-modal [titulo]="p.id ? 'Encomenda #' + p.id : 'Nova encomenda'" [largo]="true" (fechar)="editando.set(null)">
+    <div class="form-grid">
+      <div class="field span-2">
+        <span>Cliente</span>
+        @if (novoCliente === null) {
+          <div style="display: flex; gap: 6px">
+            <select [(ngModel)]="p.cliente_id" style="flex: 1">
+              <option [ngValue]="null" disabled>Escolha a cliente…</option>
+              @for (c of clientes(); track c.id) { <option [ngValue]="c.id">{{ c.nome }}</option> }
+            </select>
+            <button type="button" class="btn" (click)="novoCliente = ''">+ Nova</button>
+          </div>
+        } @else {
+          <div style="display: flex; gap: 6px">
+            <input [(ngModel)]="novoCliente" placeholder="Nome da cliente" style="flex: 1" (keydown.enter)="cadastrarCliente(p)" />
+            <button type="button" class="btn btn-primary" (click)="cadastrarCliente(p)">Cadastrar</button>
+            <button type="button" class="btn" (click)="novoCliente = null">✕</button>
+          </div>
+        }
+      </div>
+      <label class="field"><span>Data do pedido</span><input type="date" [(ngModel)]="p.data" /></label>
+      <label class="field"><span>Prazo (opcional)</span><input type="date" [(ngModel)]="p.prazo" /></label>
+      <label class="field"><span>Sinal pago (opcional)</span><input moeda [(ngModel)]="p.sinal" /></label>
+      @if (p.sinal > 0) {
+        <label class="field"><span>Forma do sinal</span>
+          <select [(ngModel)]="p.sinal_forma">
+            @for (f of formas; track f.valor) { <option [ngValue]="f.valor">{{ f.rotulo }}</option> }
+          </select>
+        </label>
+      }
+    </div>
+
+    <div>
+      <h3 style="margin-bottom: 8px">Peças pedidas</h3>
+      <div class="table-wrap">
+        <table class="table-edit">
+          <thead>
+            <tr>
+              <th>Descrição</th>
+              <th style="width: 70px">Tam.</th>
+              <th style="width: 100px">Cor</th>
+              <th style="width: 18%">Link / referência</th>
+              <th style="width: 60px" class="num">Qtd</th>
+              <th style="width: 120px" class="num">Preço combinado</th>
+              <th style="width: 15%">Comprar em</th>
+              <th style="width: 36px"></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (i of p.itens; track $index; let idx = $index) {
+              <tr [class.apagada]="i.status === 'cancelado'">
+                <td><input [(ngModel)]="i.descricao" placeholder="Ex.: Vestido longo de alcinha" /></td>
+                <td><input [(ngModel)]="i.tamanho" placeholder="M" /></td>
+                <td><input [(ngModel)]="i.cor" placeholder="Azul" /></td>
+                <td><input [(ngModel)]="i.referencia" placeholder="Cole o link do anúncio" /></td>
+                <td><input type="number" min="1" step="1" [(ngModel)]="i.quantidade" /></td>
+                <td><input moeda [(ngModel)]="i.preco" /></td>
+                <td>
+                  <select [(ngModel)]="i.fornecedor_id">
+                    <option [ngValue]="null">—</option>
+                    @for (f of fornecedores(); track f.id) { <option [ngValue]="f.id">{{ f.nome }}</option> }
+                  </select>
+                </td>
+                <td>
+                  @if (i.status === 'entregue') {
+                    <span class="muted" title="Já entregue (faz parte de uma venda)">✓</span>
+                  } @else {
+                    <button type="button" class="btn-icon" (click)="p.itens.splice(idx, 1)" [disabled]="p.itens.length === 1" aria-label="Remover peça">✕</button>
+                  }
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+      <button type="button" class="btn btn-sm" style="margin-top: 8px" (click)="adicionarItem(p)">+ Adicionar peça</button>
+    </div>
+
+    <div class="grid grid-2">
+      <label class="field"><span>Observações</span>
+        <textarea rows="3" [(ngModel)]="p.observacao" placeholder="Ex.: quer para a festa do dia 15; aceita outra cor se não tiver"></textarea>
+      </label>
+      <div class="card" style="box-shadow: none">
+        <div class="resumo-linhas">
+          <span>Total combinado</span><span class="num">{{ totalPedido(p) | brl }}</span>
+          <span>Sinal</span><span class="num" [class.pos]="p.sinal > 0">{{ p.sinal || 0 | brl }}</span>
+          <span class="total">A receber na entrega</span><span class="num total">{{ totalPedido(p) - (p.sinal || 0) | brl }}</span>
+        </div>
+      </div>
+    </div>
+
+    <ng-container rodape>
+      @if (p.id) {
+        <button class="btn btn-danger" style="margin-right: auto" (click)="excluir(p)">Excluir</button>
+      }
+      <button class="btn" (click)="editando.set(null)">Cancelar</button>
+      <button class="btn btn-primary" (click)="salvar(p)" [disabled]="ocupado()">Salvar encomenda</button>
+    </ng-container>
+  </app-modal>
+}
+
+<!-- ===================================================== Reservar do estoque -->
+@if (reservando(); as r) {
+  <app-modal [titulo]="'Atender com peça do estoque — ' + r.item.descricao" (fechar)="reservando.set(null)">
+    <p class="muted" style="margin: 0">A peça escolhida fica reservada para a cliente e a encomenda passa para "Chegou".</p>
+    <input [(ngModel)]="r.filtro" placeholder="Filtrar estoque…" />
+    <div class="lista-estoque">
+      @for (e of estoqueFiltrado(r); track e.id) {
+        <button type="button" class="opcao-estoque" (click)="reservar(r.item, e)">
+          <span><strong>{{ e.descricao }}</strong>@if (e.tamanho) { · {{ e.tamanho }} }
+            <span class="muted"> · {{ e.fornecedor || 'sem fornecedor' }}</span></span>
+          <span class="muted">{{ e.disponivel }} disp. · {{ e.preco_venda | brl }}</span>
+        </button>
+      } @empty {
+        <div class="vazio">Nenhuma peça livre no estoque{{ r.filtro ? ' com "' + r.filtro + '"' : '' }}.</div>
+      }
+    </div>
+  </app-modal>
+}
+
+<!-- ===================================================== Gerar venda -->
+@if (gerando(); as g) {
+  <app-modal [titulo]="'Gerar venda — ' + g.pedido.cliente" (fechar)="gerando.set(null)">
+    <p class="muted" style="margin: 0">Entram na venda as peças que já chegaram. As outras continuam na encomenda.</p>
+    <table>
+      <tbody>
+        @for (i of g.itens; track i.id) {
+          <tr>
+            <td>{{ i.quantidade > 1 ? i.quantidade + 'x ' : '' }}{{ i.descricao }} <span class="muted">{{ detalhes(i) }}</span></td>
+            <td class="num">{{ i.quantidade * i.preco | brl }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+    <div class="resumo-linhas">
+      <span>Total</span><span class="num">{{ g.total | brl }}</span>
+      @if (g.sinal > 0) { <span>Sinal já pago (vira recebimento)</span><span class="num pos">{{ g.sinal | brl }}</span> }
+      <span class="total">Falta receber</span><span class="num total">{{ g.total - g.sinal | brl }}</span>
+    </div>
+    <div class="form-grid">
+      <label class="field"><span>Data da venda</span><input type="date" [(ngModel)]="g.data" /></label>
+      <label class="field"><span>Vencimento</span><input type="date" [(ngModel)]="g.vencimento" /></label>
+    </div>
+    <ng-container rodape>
+      <button class="btn" (click)="gerando.set(null)">Cancelar</button>
+      <button class="btn btn-primary" (click)="gerarVenda(g)" [disabled]="ocupado()">Gerar venda</button>
+    </ng-container>
+  </app-modal>
+}
+
+<!-- ===================================================== Lista de compras -->
+@if (listaCompras(); as grupos) {
+  <app-modal titulo="Lista de compras" [largo]="true" (fechar)="listaCompras.set(null)">
+    <p class="muted" style="margin: 0">Peças "a comprar" agrupadas por fornecedor — dá para fazer um pedido só por loja e economizar frete.</p>
+    @for (g of grupos; track g.fornecedor_id) {
+      <section class="grupo-compra">
+        <h3>🛍 {{ g.fornecedor }} <span class="muted">· {{ g.pecas }} peça{{ g.pecas > 1 ? 's' : '' }}</span></h3>
+        <table>
+          <tbody>
+            @for (i of g.itens; track i.id) {
+              <tr>
+                <td>{{ i.quantidade }}x <strong>{{ i.descricao }}</strong>
+                  @if (i.tamanho) { · {{ i.tamanho }} } @if (i.cor) { · {{ i.cor }} }
+                  @if (ehLink(i.referencia)) { · <a [href]="i.referencia" target="_blank">anúncio ↗</a> }
+                  @else if (i.referencia) { <span class="muted"> · ref. {{ i.referencia }}</span> }
+                </td>
+                <td>para <strong>{{ i.cliente }}</strong></td>
+                <td class="muted">{{ i.prazo ? 'até ' : '' }}{{ i.prazo ? (i.prazo | dataBr) : '' }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </section>
+    } @empty {
+      <div class="vazio">Nada para comprar. 🎉</div>
+    }
+    <ng-container rodape>
+      <span class="muted" style="margin-right: auto">Depois de comprar, lance a entrada e use "Incluir encomendas" para ligar as peças.</span>
+      @if (grupos.length) { <button class="btn" (click)="copiarLista(grupos)">Copiar lista</button> }
+      <button class="btn btn-primary" (click)="listaCompras.set(null)">Fechar</button>
+    </ng-container>
+  </app-modal>
+}

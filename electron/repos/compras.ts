@@ -8,6 +8,8 @@ export interface CompraItemInput {
   quantidade: number;
   custo_unitario: number;
   preco_venda: number;
+  /** Item de encomenda que esta peça atende: ao salvar, a encomenda passa a "comprado" e a peça fica reservada. */
+  pedido_item_id?: number | null;
 }
 
 export interface CompraInput {
@@ -26,9 +28,24 @@ export interface FiltroPeriodo {
   ate?: string;
 }
 
-const VENDIDOS_SQL = `(SELECT COALESCE(SUM(vi.quantidade),0) FROM venda_itens vi
+export const VENDIDOS_SQL = `(SELECT COALESCE(SUM(vi.quantidade),0) FROM venda_itens vi
                         JOIN vendas v ON v.id = vi.venda_id AND v.cancelada = 0
                        WHERE vi.compra_item_id = ci.id)`;
+
+/** Unidades da peça (ci) reservadas para encomendas ainda não entregues. */
+export const RESERVADOS_SQL = `(SELECT COALESCE(SUM(pi.quantidade),0) FROM pedido_itens pi
+                         WHERE pi.compra_item_id = ci.id AND pi.status IN ('comprado','chegou'))`;
+
+/** Desfaz o vínculo de encomendas com peças que vão sumir (item removido ou compra excluída). */
+function desvincularEncomendas(compraItemIds: number[]): void {
+  if (!compraItemIds.length) return;
+  getDb()
+    .prepare(
+      `UPDATE pedido_itens SET status = 'anotado', compra_item_id = NULL
+        WHERE compra_item_id IN (${compraItemIds.map(() => '?').join(',')}) AND status IN ('comprado','chegou')`,
+    )
+    .run(...compraItemIds);
+}
 
 /**
  * Rateia frete, desconto e comissão proporcionalmente ao valor de cada item,
@@ -87,7 +104,14 @@ export const compras = {
     const c = db.prepare('SELECT * FROM compras WHERE id = ?').get(id) as any;
     if (!c) return null;
     const itens = db
-      .prepare(`SELECT ci.*, ${VENDIDOS_SQL} AS vendidos FROM compra_itens ci WHERE ci.compra_id = ? ORDER BY ci.id`)
+      .prepare(
+        `SELECT ci.*, ${VENDIDOS_SQL} AS vendidos,
+                (SELECT pi.id FROM pedido_itens pi WHERE pi.compra_item_id = ci.id AND pi.status <> 'cancelado' LIMIT 1) AS pedido_item_id,
+                (SELECT GROUP_CONCAT(cl.nome, ', ') FROM pedido_itens pi
+                   JOIN pedidos p ON p.id = pi.pedido_id JOIN clientes cl ON cl.id = p.cliente_id
+                  WHERE pi.compra_item_id = ci.id AND pi.status <> 'cancelado') AS encomenda_de
+           FROM compra_itens ci WHERE ci.compra_id = ? ORDER BY ci.id`,
+      )
       .all(id) as any[];
     return {
       ...c,
@@ -143,8 +167,16 @@ export const compras = {
       for (const a of atuais) {
         if (mantidos.has(a.id)) continue;
         if (a.vendidos > 0) throw new Error(`O item "${a.descricao}" já tem vendas e não pode ser removido.`);
+        desvincularEncomendas([a.id]);
         db.prepare('DELETE FROM compra_itens WHERE id = ?').run(a.id);
       }
+
+      // Liga a peça ao item de encomenda: a encomenda vira "comprado" e a peça fica reservada para a cliente.
+      const vincular = db.prepare(
+        `UPDATE pedido_itens SET compra_item_id = :ci,
+                status = CASE WHEN status = 'anotado' THEN 'comprado' ELSE status END
+          WHERE id = :pi AND status IN ('anotado','comprado','chegou')`,
+      );
 
       for (const item of compra.itens) {
         const p = {
@@ -157,18 +189,24 @@ export const compras = {
           custo_efetivo: efetivo(item),
           preco_venda: toCents(item.preco_venda),
         };
-        if (item.id) {
+        let itemId = item.id;
+        if (itemId) {
           db.prepare(
             `UPDATE compra_itens SET fornecedor_id=:fornecedor_id, descricao=:descricao, tamanho=:tamanho,
              quantidade=:quantidade, custo_unitario=:custo_unitario, custo_efetivo=:custo_efetivo,
              preco_venda=:preco_venda WHERE id=:id AND compra_id=:compra_id`,
-          ).run({ ...p, id: item.id });
+          ).run({ ...p, id: itemId });
         } else {
-          db.prepare(
-            `INSERT INTO compra_itens (compra_id, fornecedor_id, descricao, tamanho, quantidade, custo_unitario, custo_efetivo, preco_venda)
-             VALUES (:compra_id, :fornecedor_id, :descricao, :tamanho, :quantidade, :custo_unitario, :custo_efetivo, :preco_venda)`,
-          ).run(p);
+          itemId = Number(
+            db
+              .prepare(
+                `INSERT INTO compra_itens (compra_id, fornecedor_id, descricao, tamanho, quantidade, custo_unitario, custo_efetivo, preco_venda)
+                 VALUES (:compra_id, :fornecedor_id, :descricao, :tamanho, :quantidade, :custo_unitario, :custo_efetivo, :preco_venda)`,
+              )
+              .run(p).lastInsertRowid,
+          );
         }
+        if (item.pedido_item_id) vincular.run({ ci: itemId, pi: item.pedido_item_id });
       }
       return id!;
     });
@@ -179,17 +217,22 @@ export const compras = {
       .prepare(`SELECT COALESCE(SUM(${VENDIDOS_SQL}),0) AS n FROM compra_itens ci WHERE ci.compra_id = ?`)
       .get(id) as { n: number };
     if (vendidos.n > 0) throw new Error('Esta compra possui peças já vendidas e não pode ser excluída.');
-    getDb().prepare('DELETE FROM compras WHERE id = ?').run(id);
+    transaction(() => {
+      const ids = (getDb().prepare('SELECT id FROM compra_itens WHERE compra_id = ?').all(id) as any[]).map((r) => r.id);
+      desvincularEncomendas(ids);
+      getDb().prepare('DELETE FROM compras WHERE id = ?').run(id);
+    });
   },
 
-  /** Peças com saldo disponível para venda. */
+  /** Peças com saldo disponível para venda (descontando as reservadas para encomendas). */
   estoque() {
     const rows = getDb()
       .prepare(
         `SELECT * FROM (
            SELECT ci.id, ci.descricao, ci.tamanho, ci.custo_efetivo, ci.preco_venda, ci.quantidade,
                   f.nome AS fornecedor, c.data AS data_compra,
-                  ci.quantidade - ${VENDIDOS_SQL} AS disponivel
+                  ${RESERVADOS_SQL} AS reservados,
+                  ci.quantidade - ${VENDIDOS_SQL} - ${RESERVADOS_SQL} AS disponivel
              FROM compra_itens ci
              JOIN compras c ON c.id = ci.compra_id
              LEFT JOIN fornecedores f ON f.id = ci.fornecedor_id
